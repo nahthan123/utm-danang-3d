@@ -103,6 +103,10 @@ export interface Waypoint4D {
  */
 export interface FlightPlan {
   plan_id: string;
+  source?: 'UTM_OPS';
+  altitude_reference?: AltitudeReference;
+  departure_name?: string | null;
+  destination_name?: string | null;
   uav_id: string;
   callsign: string;
   operator_id?: string;
@@ -216,4 +220,5 @@ export type IngestibleMessage =
   | { type: 'environment.state'; payload: EnvironmentState }
   | { type: 'monitoring.alert'; payload: MonitoringAlert }
   | { type: 'flight_plan.update'; payload: FlightPlan }
+  | { type: 'flight_plan.snapshot'; payload: FlightPlan[] }
   | { type: 'zone.update'; payload: RestrictedZone };

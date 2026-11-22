@@ -11,26 +11,31 @@ export const SettingsModal: React.FC = () => {
 const SettingsModalContent: React.FC = () => {
   const {
     wsUrl,
+    opsWsUrl,
     cesiumIonToken,
     telemetryProtocol,
     setSettingsModalOpen,
     setWsUrl,
+    setOpsWsUrl,
     setCesiumIonToken,
     setTelemetryProtocol,
     setMode,
   } = useMonitoringStore();
 
   const [inputWsUrl, setInputWsUrl] = useState(wsUrl);
+  const [inputOpsWsUrl, setInputOpsWsUrl] = useState(opsWsUrl);
   const [inputToken, setInputToken] = useState(cesiumIonToken);
 
   const handleSave = () => {
     setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
+    setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
     setCesiumIonToken(inputToken);
     setSettingsModalOpen(false);
   };
 
   const handleSaveAndConnect = () => {
     setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
+    setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
     setCesiumIonToken(inputToken);
     setMode('LIVE');
     setSettingsModalOpen(false);
@@ -56,7 +61,7 @@ const SettingsModalContent: React.FC = () => {
         </div>
 
         {/* Body */}
-        <div className="p-5 space-y-4 text-xs">
+        <div className="p-5 space-y-4 text-xs max-h-[65vh] overflow-y-auto">
           {/* WebSocket Settings */}
           <div className="space-y-1.5">
             <label className="font-semibold text-slate-300 flex items-center gap-1.5">
@@ -76,6 +81,17 @@ const SettingsModalContent: React.FC = () => {
           </div>
 
           {/* Telemetry Protocol Format */}
+          <div className="space-y-1.5">
+            <label htmlFor="ops-ws-url" className="font-semibold text-slate-300">Kế hoạch bay từ UTM Ops</label>
+            <input id="ops-ws-url" type="text" value={inputOpsWsUrl}
+              onChange={(e) => setInputOpsWsUrl(e.target.value)}
+              placeholder="ws://localhost:8000/ws/flight-plans"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-100 font-mono" />
+            <p className="text-[11px] text-slate-500">
+              Kết nối ở chế độ LIVE để nhận lộ trình đã duyệt. Vị trí UAV lấy từ nguồn telemetry ở trên.
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <label className="font-semibold text-slate-300 flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-cyan-400" />

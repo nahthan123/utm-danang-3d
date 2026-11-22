@@ -45,6 +45,13 @@ export class TelemetrySynchronizer {
     const wallClockMs = receptionWallClock.getTime();
     const latencyMs = Math.max(0, wallClockMs - messageCreatedTimeMs);
 
+    // A cancelled/foreign plan or a different altitude datum cannot be used for corridor checks.
+    if (flightPlan && (flightPlan.status === 'CANCELLED' || flightPlan.status === 'COMPLETED'
+      || flightPlan.uav_id !== msg.uav_id
+      || (flightPlan.altitude_reference && flightPlan.altitude_reference !== msg.position.altitude_reference))) {
+      flightPlan = undefined;
+    }
+
     // Initial state if first time seeing this UAV
     if (!existingState) {
       const dataQuality: DataQuality = {

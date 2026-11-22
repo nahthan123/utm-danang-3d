@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "bc35efb5-0b50-413e-800c-3f23fba93c79",
+  "eventType": "flightplan.accepted",
+  "occurredAt": "2027-01-01T01:00:00Z",
+  "coordinateSystem": {
+    "horizontalReference": "WGS84", "epsg": 4326,
+    "horizontalFields": ["latitude", "longitude"],
+    "altitudeReference": "AGL", "altitudeUnit": "m", "timeReference": "UTC"
+  },
+  "flightPlan": {
+    "flightId": "6dc2c951-41f1-41ed-832c-f1fd93b25413",
+    "submissionId": "08e5cd35-c402-474b-9bb0-373639e7b31e",
+    "uavCount": 2,
+    "operatorId": "d263d616-e4f0-4b05-b55c-ce7353f4812b",
+    "droneId": "20e92194-64ac-4a14-a4f4-0867249fe888",
+    "serialNumber": "SIM-MR-EXAMPLE-001",
+    "droneType": "MULTIROTOR",
+    "performanceProfile": {"maxSpeedMps": 20.0, "maxFlightTimeMinutes": 25},
+    "departureName": "Bãi đáp mô phỏng A",
+    "destinationName": "Bãi đáp mô phỏng B",
+    "startTime": "2027-01-01T02:00:00Z",
+    "endTime": "2027-01-01T02:10:00Z",
+    "status": "APPROVED",
+    "reviewedAt": "2027-01-01T01:00:00Z",
+    "reviewedBy": "5a9b2e57-c6ca-44c1-8c28-c9ac523d3310",
+    "reviewNote": "Ví dụ minh họa dữ liệu; chưa chạy mô phỏng hoặc kiểm tra xung đột.",
+    "waypoints": [
+      {"latitude": 16.0600, "longitude": 108.2200, "altitude": 60, "time": "2027-01-01T02:00:00Z"},
+      {"latitude": 16.0650, "longitude": 108.2250, "altitude": 60, "time": "2027-01-01T02:10:00Z"}
+    ]
+  }
+}

@@ -1,4 +1,6 @@
 # UTM MONITORING & TACTICAL DECONFLICTION SYSTEM (TASKS 10, 11, 12 & 13)
+
+Kết nối kế hoạch bay từ UTM Ops: [Hướng dẫn cấu hình và kiểm tra](UTM_OPS_INTEGRATION.md).
 > **Đồ án nghiên cứu**: Hệ thống UTM tích hợp AI hỗ trợ phát hiện, giám sát thời gian thực 3D và giảm thiểu xung đột chiến thuật cho UAV trong khu vực Đà Nẵng.  
 > **Các nhiệm vụ đảm nhiệm**:
 > - **Task 10 (Phần 4)**: Giám sát thời gian thực và tái dựng không gian 3D Đà Nẵng (React + TypeScript + CesiumJS).

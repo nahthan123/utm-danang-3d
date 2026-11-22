@@ -6,6 +6,7 @@ UTM Tactical Deconfliction & AI Advisory Engine
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.tactical_routes import router as tactical_router
+from backend.app.api.flight_plan_routes import router as flight_plan_router
 
 app = FastAPI(
     title="Da Nang UTM Tactical Deconfliction Engine",
@@ -23,6 +24,7 @@ app.add_middleware(
 )
 
 app.include_router(tactical_router)
+app.include_router(flight_plan_router)
 
 @app.get("/")
 def read_root():

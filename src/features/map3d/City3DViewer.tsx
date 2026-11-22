@@ -429,6 +429,7 @@ export const City3DViewer: React.FC = () => {
     if (!showPlans) return;
 
     Object.values(flightPlans).forEach((plan) => {
+      if (plan.status === 'CANCELLED' || plan.status === 'COMPLETED') return;
       const color = plan.color || '#06b6d4';
       const pts = plan.waypoints.map((wp) => wgs84ToThree(wp.latitude, wp.longitude, wp.altitude_m));
       if (pts.length < 2) return;

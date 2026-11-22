@@ -70,14 +70,17 @@ export class LiveWebSocketDataSource implements IDataSource {
     this.callbacks?.onConnectionChange('CONNECTING', `Đang kết nối máy chủ Telemetry WS: ${this.serverUrl}`);
 
     try {
-      this.ws = new WebSocket(this.serverUrl);
+      const socket = new WebSocket(this.serverUrl);
+      this.ws = socket;
 
       this.ws.onopen = () => {
+        if (this.ws !== socket || !this._isRunning) return;
         this.reconnectAttempts = 0;
         this.callbacks?.onConnectionChange('CONNECTED', `Đã kết nối Telemetry WS: ${this.serverUrl}`);
       };
 
       this.ws.onmessage = (event: MessageEvent) => {
+        if (this.ws !== socket || !this._isRunning) return;
         try {
           const rawData = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
           
@@ -108,12 +111,14 @@ export class LiveWebSocketDataSource implements IDataSource {
       };
 
       this.ws.onerror = () => {
+        if (this.ws !== socket || !this._isRunning) return;
         if (!this.isIntentionallyClosed) {
           this.callbacks?.onConnectionChange('ERROR', `Lỗi kết nối tới ${this.serverUrl}`);
         }
       };
 
       this.ws.onclose = (event) => {
+        if (this.ws !== socket || !this._isRunning) return;
         if (this.isIntentionallyClosed) return;
 
         this.callbacks?.onConnectionChange('RECONNECTING', `Mất kết nối (code ${event.code}). Sẽ thử kết nối lại...`);

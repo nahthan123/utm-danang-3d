@@ -25,6 +25,8 @@ interface MonitoringStoreState {
   connectionStatus: ConnectionStatus;
   connectionMessage: string;
   wsUrl: string;
+  opsWsUrl: string;
+  opsConnectionStatus: ConnectionStatus;
   cesiumIonToken: string;
 
   // Tracked Entities
@@ -66,6 +68,7 @@ interface MonitoringStoreState {
   // Actions
   setMode: (mode: 'DEMO' | 'LIVE') => void;
   setWsUrl: (url: string) => void;
+  setOpsWsUrl: (url: string) => void;
   setCesiumIonToken: (token: string) => void;
   setTelemetryProtocol: (p: 'AUTO_DETECT' | 'INTERNAL_V1' | 'PHUOC_SIMULATOR') => void;
   selectUav: (id: string | null) => void;
@@ -101,6 +104,7 @@ interface MonitoringStoreState {
 // Singletons for validation and synchronization
 const synchronizer = new TelemetrySynchronizer();
 let activeDataSource: IDataSource | null = null;
+let opsDataSource: LiveWebSocketDataSource | null = null;
 let livenessTimer: number | null = null;
 
 // Initial flight plans map
@@ -113,7 +117,9 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   mode: 'DEMO',
   connectionStatus: 'DISCONNECTED',
   connectionMessage: 'Chưa kết nối',
-  wsUrl: 'ws://localhost:8000/ws/telemetry',
+  wsUrl: import.meta.env.VITE_WS_TELEMETRY_URL || 'ws://localhost:8000/ws/telemetry',
+  opsWsUrl: import.meta.env.VITE_OPS_WS_URL || 'ws://localhost:8000/ws/flight-plans',
+  opsConnectionStatus: 'DISCONNECTED',
   cesiumIonToken: '',
 
   uavStates: {},
@@ -162,6 +168,10 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
     }
   },
   setCesiumIonToken: (token: string) => set({ cesiumIonToken: token }),
+  setOpsWsUrl: (url: string) => {
+    set({ opsWsUrl: url });
+    opsDataSource?.setUrl(url);
+  },
   setTelemetryProtocol: (p) => set({ telemetryProtocol: p }),
 
   setLeftPanelOpen: (open: boolean) => set({ leftPanelOpen: open }),
@@ -321,9 +331,14 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
       activeDataSource = null;
     }
 
+    opsDataSource?.stop();
+    opsDataSource = null;
+
     set({
       mode: newMode,
       uavStates: {},
+      flightPlans: newMode === 'DEMO' ? { ...initialPlansMap } : {},
+      opsConnectionStatus: 'DISCONNECTED',
       selectedUavId: null,
       conflictDemoActive: false,
       connectionStatus: 'CONNECTING',
@@ -347,6 +362,17 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
         set({ connectionStatus: 'ERROR', connectionMessage: err.message });
       },
     });
+
+    if (newMode === 'LIVE') {
+      opsDataSource = new LiveWebSocketDataSource(store.opsWsUrl);
+      opsDataSource.start({
+        onMessage: (msg) => {
+          if (msg.type === 'flight_plan.update' || msg.type === 'flight_plan.snapshot') store.ingestMessage(msg);
+        },
+        onConnectionChange: (status) => set({ opsConnectionStatus: status }),
+        onError: () => set({ opsConnectionStatus: 'ERROR' }),
+      });
+    }
   },
 
   ingestMessage: (msg: IngestibleMessage) => {
@@ -454,6 +480,10 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
       }));
     }
 
+    else if (msg.type === 'flight_plan.snapshot') {
+      set({ flightPlans: Object.fromEntries(msg.payload.map((plan) => [plan.plan_id, plan])) });
+    }
+
     // Handle Dynamic Restricted Zone Updates from Part 2
     else if (msg.type === 'zone.update') {
       const zone = (msg as { payload: RestrictedZone }).payload;
@@ -528,6 +558,9 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   },
 
   cleanup: () => {
+    opsDataSource?.stop();
+    opsDataSource = null;
+    set({ opsConnectionStatus: 'DISCONNECTED' });
     if (activeDataSource) {
       activeDataSource.stop();
       activeDataSource = null;

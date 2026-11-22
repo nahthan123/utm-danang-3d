@@ -366,6 +366,7 @@ export const CesiumViewer: React.FC = () => {
     if (!showPlans) return;
 
     Object.values(flightPlans).forEach((plan) => {
+      if (plan.status === 'CANCELLED' || plan.status === 'COMPLETED') return;
       const createdEntities: Cesium.Entity[] = [];
       const planPositions = plan.waypoints.map((wp) =>
         Cesium.Cartesian3.fromDegrees(wp.longitude, wp.latitude, wp.altitude_m)

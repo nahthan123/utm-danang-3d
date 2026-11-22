@@ -5,6 +5,9 @@ import { Search, Plane, AlertTriangle, Eye, Activity, Signal, Navigation2 } from
 export const FlightListPanel: React.FC = () => {
   const {
     uavStates,
+    flightPlans,
+    mode,
+    opsConnectionStatus,
     selectedUavId,
     searchQuery,
     statusFilter,
@@ -15,6 +18,8 @@ export const FlightListPanel: React.FC = () => {
   } = useMonitoringStore();
 
   const allUavs = Object.values(uavStates);
+  const opsPlans = Object.values(flightPlans).filter((plan) => plan.source === 'UTM_OPS');
+  const planLabels = { SCHEDULED: 'Đã duyệt', ACTIVE: 'Đang thực hiện', COMPLETED: 'Hoàn thành', CANCELLED: 'Đã hủy' };
 
   // Filter UAVs based on search and status
   const filteredUavs = allUavs.filter((uav) => {
@@ -91,6 +96,33 @@ export const FlightListPanel: React.FC = () => {
 
       {/* Flight Cards List */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {mode === 'LIVE' && (
+          <section className="p-2 rounded border border-slate-800 bg-slate-900/70 text-xs text-slate-300">
+            <div className="font-semibold mb-2">Kế hoạch UTM Ops · {opsPlans.length}</div>
+            <p className="text-[11px] text-slate-400 mb-2">
+              {opsConnectionStatus === 'CONNECTED' ? 'Đã kết nối' : 'Chưa kết nối UTM Ops'}
+            </p>
+            {opsPlans.map((plan) => (
+              <button key={plan.plan_id} className="block w-full text-left border-t border-slate-800 py-2"
+                onClick={() => {
+                  const point = plan.waypoints[0];
+                  if (point) useMonitoringStore.setState({ cameraTarget: {
+                    latitude: point.latitude, longitude: point.longitude,
+                    altitude_m: Math.max(point.altitude_m + 300, 500), timestamp: Date.now(),
+                  } });
+                }}>
+                <span className="block font-mono text-cyan-300">{plan.callsign} · {planLabels[plan.status]}</span>
+                <span className="block text-[11px] text-slate-400">{plan.departure_name || 'Điểm đi'} → {plan.destination_name || 'Điểm đến'}</span>
+                <span className="block text-[11px] text-slate-500">
+                  {new Date(plan.departure_time_utc).toLocaleString('vi-VN')} · {plan.altitude_reference}
+                </span>
+                {!Object.values(uavStates).some((uav) => uav.flight_plan_id === plan.plan_id) && (
+                  <span className="text-[11px] text-amber-300">Chưa có telemetry liên kết</span>
+                )}
+              </button>
+            ))}
+          </section>
+        )}
         {filteredUavs.length === 0 ? (
           <div className="p-4 text-center text-xs text-slate-500">
             Không tìm thấy phương tiện bay nào phù hợp
