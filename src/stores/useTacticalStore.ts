@@ -188,14 +188,45 @@ export const useTacticalStore = create<TacticalStoreState>((set, get) => ({
   },
 
   initializeTacticalBridge: () => {
-    // Automatically subscribe to Part 4 export bridge
-    const unsubscribe = part5Bridge.subscribe((feed) => {
-      get().processFeedSnapshot(feed);
+    let lastDispatchedMs = 0;
+    let inFlight = false;
+
+    // Automatically subscribe to Part 4 export bridge with 1s throttle; only run automatic CPA when conflictDemoActive is enabled
+    const unsubscribeFeed = part5Bridge.subscribe((feed) => {
+      if (!useMonitoringStore.getState().conflictDemoActive) {
+        if (get().conflicts.length > 0) {
+          set({ conflicts: [], previewedOption: null });
+        }
+        return;
+      }
+
+      const nowMs = Date.now();
+      if (inFlight || nowMs - lastDispatchedMs < 1000) {
+        return;
+      }
+      lastDispatchedMs = nowMs;
+      inFlight = true;
+      void get()
+        .processFeedSnapshot(feed)
+        .finally(() => {
+          inFlight = false;
+        });
     });
+
+    const unsubscribeMonitoring = useMonitoringStore.subscribe((state, prev) => {
+      if ((!state.conflictDemoActive && prev.conflictDemoActive) || state.mode !== prev.mode) {
+        set({ conflicts: [], previewedOption: null, tacticalPanelOpen: false });
+      }
+    });
+
     // Check initial health
     tacticalClient.checkHealth().then((online) => {
       set({ backendConnected: online });
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeFeed();
+      unsubscribeMonitoring();
+    };
   },
 }));

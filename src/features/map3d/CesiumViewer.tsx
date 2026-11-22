@@ -10,6 +10,7 @@ import {
   DANANG_VERTIPORT_PADS,
 } from '../../data/danang3DEnvironment';
 import { UAVType } from '../../types/telemetry';
+import { predictForwardPath } from '../../services/prediction/TrajectoryPredictor';
 import { ChevronDown, ChevronUp, Compass } from 'lucide-react';
 
 function metersOffsetDegrees(latDeg: number, dxMeters: number, dyMeters: number) {
@@ -38,6 +39,7 @@ export const CesiumViewer: React.FC = () => {
   const dropLineEntitiesRef = useRef<Map<string, Cesium.Entity>>(new Map());
   const footprintEntitiesRef = useRef<Map<string, Cesium.Entity>>(new Map());
   const trailEntitiesRef = useRef<Map<string, Cesium.Entity>>(new Map());
+  const predictionEntitiesRef = useRef<Map<string, Cesium.Entity>>(new Map());
   const planEntitiesRef = useRef<Map<string, Cesium.Entity[]>>(new Map());
   const zoneEntitiesRef = useRef<Map<string, Cesium.Entity>>(new Map());
   const cityEntitiesRef = useRef<Cesium.Entity[]>([]);
@@ -55,6 +57,7 @@ export const CesiumViewer: React.FC = () => {
     showZones,
     showPlans,
     showTrails,
+    showPredictions,
     show3DCity,
     mapStyle,
     cameraTarget,
@@ -432,6 +435,7 @@ export const CesiumViewer: React.FC = () => {
     cleanupRemoved(dropLineEntitiesRef.current);
     cleanupRemoved(footprintEntitiesRef.current);
     cleanupRemoved(trailEntitiesRef.current);
+    cleanupRemoved(predictionEntitiesRef.current);
 
     Object.values(uavStates).forEach((uav) => {
       const isSelected = selectedUavId === uav.uav_id;
@@ -460,7 +464,7 @@ export const CesiumViewer: React.FC = () => {
       if (uav.plan_deviation && !uav.plan_deviation.within_corridor) pinColor = Cesium.Color.ORANGE;
 
       const modelUri = getUavModelUri(uav.uav_profile?.uav_type);
-      const labelText = `${uav.callsign || uav.uav_id} [${Math.round(uav.position.altitude_m)}m ${uav.position.altitude_reference}]`;
+      const labelText = `${uav.uav_id} [${Math.round(uav.position.altitude_m)}m ${uav.position.altitude_reference}]`;
 
       // 6a. 3D UAV Model Entity
       let entity = uavEntitiesRef.current.get(uav.uav_id);
@@ -579,8 +583,39 @@ export const CesiumViewer: React.FC = () => {
           trailEntitiesRef.current.delete(uav.uav_id);
         }
       }
+
+      // 6e. Forward Dashed Prediction Polyline ("- - - -")
+      const linkedPlan = uav.flight_plan_id ? flightPlans[uav.flight_plan_id] : undefined;
+      const prediction = showPredictions ? predictForwardPath(uav, linkedPlan) : null;
+      if (showPredictions && prediction && prediction.points.length > 1) {
+        const predPositions = prediction.points.map((p) =>
+          Cesium.Cartesian3.fromDegrees(p.longitude, p.latitude, p.altitude_m)
+        );
+        let predEntity = predictionEntitiesRef.current.get(uav.uav_id);
+        if (!predEntity) {
+          predEntity = viewer.entities.add({
+            polyline: {
+              positions: predPositions,
+              width: 2.5,
+              material: new Cesium.PolylineDashMaterialProperty({
+                color: Cesium.Color.fromCssColorString('#facc15'),
+                dashLength: 16.0,
+              }),
+            },
+          });
+          predictionEntitiesRef.current.set(uav.uav_id, predEntity);
+        } else {
+          predEntity.polyline!.positions = predPositions as any;
+        }
+      } else {
+        const predEntity = predictionEntitiesRef.current.get(uav.uav_id);
+        if (predEntity) {
+          viewer.entities.remove(predEntity);
+          predictionEntitiesRef.current.delete(uav.uav_id);
+        }
+      }
     });
-  }, [uavStates, selectedUavId, showTrails]);
+  }, [uavStates, flightPlans, selectedUavId, showTrails, showPredictions]);
 
   // 7. Tactical Conflict & Resolution Trajectory Rendering
   useEffect(() => {
@@ -812,6 +847,15 @@ export const CesiumViewer: React.FC = () => {
               className="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0"
             />
             Vệt bay thực tế (Trails)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-300 px-0.5 cursor-pointer hover:text-white">
+            <input
+              type="checkbox"
+              checked={showPredictions}
+              onChange={() => useMonitoringStore.getState().toggleLayer('predictions')}
+              className="rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-0"
+            />
+            Dự đoán đường đi (- - - -)
           </label>
         </div>
 

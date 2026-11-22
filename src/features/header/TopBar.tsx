@@ -1,5 +1,4 @@
 import { useMonitoringStore } from '../../stores/useMonitoringStore';
-import { useTacticalStore } from '../../stores/useTacticalStore';
 import { Radio, Wifi, WifiOff, RefreshCw, Settings, Sliders, ShieldAlert, Navigation, Play, Pause, FileCode } from 'lucide-react';
 import { formatUtcTime } from '../../utils/time';
 
@@ -23,8 +22,6 @@ export const TopBar: React.FC = () => {
     togglePauseSimulation,
     setSimulationSpeed,
   } = useMonitoringStore();
-
-  const { conflicts, tacticalPanelOpen, toggleTacticalPanel } = useTacticalStore();
 
   const totalUavs = Object.keys(uavStates).length;
   const criticalAlertsCount = alerts.filter((a) => !a.acknowledged && a.severity === 'CRITICAL').length;
@@ -188,27 +185,6 @@ export const TopBar: React.FC = () => {
             <span>{criticalAlertsCount + warningAlertsCount} Cảnh báo</span>
           </div>
         )}
-
-        {/* Tactical Deconfliction Button */}
-        <button
-          onClick={toggleTacticalPanel}
-          title="Bật/Tắt bảng Giám sát & Xử lý Xung đột Chiến thuật (Khối 5)"
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded border transition-all ${
-            conflicts.length > 0
-              ? 'bg-rose-950/90 text-rose-300 border-rose-600 animate-pulse shadow-sm shadow-rose-950'
-              : tacticalPanelOpen
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-              : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
-          }`}
-        >
-          <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
-          <span>Chiến thuật</span>
-          {conflicts.length > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-bold">
-              {conflicts.length}
-            </span>
-          )}
-        </button>
 
         {/* Import External Telemetry JSON Button */}
         <button

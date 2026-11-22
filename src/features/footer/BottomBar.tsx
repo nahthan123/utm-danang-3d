@@ -1,24 +1,19 @@
 import React from 'react';
 import { useMonitoringStore } from '../../stores/useMonitoringStore';
-import { useTacticalStore } from '../../stores/useTacticalStore';
-import { part5Bridge } from '../../services/part5Bridge/Part5ExportBridge';
-import { Download, Cpu, Activity, Clock, Layers } from 'lucide-react';
+import { Cpu, Clock } from 'lucide-react';
 import { formatUtcTime } from '../../utils/time';
 
 export const BottomBar: React.FC = () => {
   const {
     mode,
     connectionStatus,
-    simClockIso,
     wallClockIso,
     uavStates,
-    alerts,
     totalReceivedPackets,
     droppedPacketsCount,
     outOfOrderCount,
+    vuongOutboundEnabled,
   } = useMonitoringStore();
-
-  const { backendConnected } = useTacticalStore();
 
   const states = Object.values(uavStates);
   const freshCount = states.filter((u) => u.data_quality.freshness === 'FRESH').length;
@@ -26,18 +21,6 @@ export const BottomBar: React.FC = () => {
   const staleCount = states.filter(
     (u) => u.data_quality.freshness === 'STALE' || u.data_quality.freshness === 'LOST'
   ).length;
-
-  const handleExportPart5Snapshot = () => {
-    const snapshot = part5Bridge.generateSnapshot(uavStates, alerts);
-    const jsonStr = JSON.stringify(snapshot, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `part5_utm_feed_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <footer className="h-8 bg-slate-950/95 border-t border-slate-800 px-4 flex items-center justify-between text-[11px] font-mono text-slate-400 z-20 backdrop-blur-md select-none">
@@ -75,7 +58,7 @@ export const BottomBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Right: Telemetry Engine Health & Part 5 Export */}
+      {/* Right: Telemetry Engine Health & UTM Ops Outbound Status */}
       <div className="flex items-center gap-4">
         <div className="hidden lg:flex items-center gap-2 text-slate-500">
           <span>Gói nhận: {totalReceivedPackets}</span>
@@ -87,27 +70,17 @@ export const BottomBar: React.FC = () => {
 
         <div className="h-3 w-[1px] bg-slate-800" />
 
-        {/* Khối 5 Status & ObservedState Export Button */}
         <div className="flex items-center gap-2">
           <span
             className={`flex items-center gap-1 px-2 py-0.5 rounded border ${
-              backendConnected
+              vuongOutboundEnabled
                 ? 'text-emerald-400 bg-emerald-950/60 border-emerald-800/80'
-                : 'text-cyan-400 bg-cyan-950/60 border-cyan-800/80'
+                : 'text-slate-400 bg-slate-900 border-slate-700'
             }`}
           >
             <Cpu className="w-3 h-3" />
-            KHỐI 5: {backendConnected ? 'ONLINE (FASTAPI:8000)' : 'EMBEDDED ACTIVE'}
+            ĐẦU RA UTM OPS: {vuongOutboundEnabled ? 'ĐANG GỬI (2s/lần)' : 'TẠM DỪNG'}
           </span>
-
-          <button
-            onClick={handleExportPart5Snapshot}
-            title="Xuất ảnh chụp ObservedState sạch (JSON) gửi Khối 5"
-            className="flex items-center gap-1 px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded border border-slate-700 transition-all"
-          >
-            <Download className="w-3 h-3" />
-            <span>Xuất ObservedState</span>
-          </button>
         </div>
       </div>
     </footer>

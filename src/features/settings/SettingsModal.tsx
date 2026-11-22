@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMonitoringStore } from '../../stores/useMonitoringStore';
-import { X, Globe, Wifi, Key, Save, AlertCircle, Radio } from 'lucide-react';
+import { X, Globe, Wifi, Save, Radio } from 'lucide-react';
 
 export const SettingsModal: React.FC = () => {
   const settingsModalOpen = useMonitoringStore((state) => state.settingsModalOpen);
@@ -12,31 +12,40 @@ const SettingsModalContent: React.FC = () => {
   const {
     wsUrl,
     opsWsUrl,
-    cesiumIonToken,
+    vuongOutboundUrl,
+    vuongOutboundEnabled,
     telemetryProtocol,
     setSettingsModalOpen,
     setWsUrl,
     setOpsWsUrl,
-    setCesiumIonToken,
+    setVuongOutboundUrl,
+    setVuongOutboundEnabled,
     setTelemetryProtocol,
     setMode,
   } = useMonitoringStore();
 
   const [inputWsUrl, setInputWsUrl] = useState(wsUrl);
   const [inputOpsWsUrl, setInputOpsWsUrl] = useState(opsWsUrl);
-  const [inputToken, setInputToken] = useState(cesiumIonToken);
+  const [inputVuongUrl, setInputVuongUrl] = useState(vuongOutboundUrl);
+  const [inputVuongEnabled, setInputVuongEnabled] = useState(vuongOutboundEnabled);
 
   const handleSave = () => {
     setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
     setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
-    setCesiumIonToken(inputToken);
+    setVuongOutboundUrl(
+      inputVuongUrl.trim() || 'http://localhost:8080/api/integration/monitoring-updates'
+    );
+    setVuongOutboundEnabled(inputVuongEnabled);
     setSettingsModalOpen(false);
   };
 
   const handleSaveAndConnect = () => {
     setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
     setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
-    setCesiumIonToken(inputToken);
+    setVuongOutboundUrl(
+      inputVuongUrl.trim() || 'http://localhost:8080/api/integration/monitoring-updates'
+    );
+    setVuongOutboundEnabled(inputVuongEnabled);
     setMode('LIVE');
     setSettingsModalOpen(false);
   };
@@ -92,6 +101,30 @@ const SettingsModalContent: React.FC = () => {
             </p>
           </div>
 
+          {/* Outbound Delivery to Vuong (HTTP POST) */}
+          <div className="space-y-1.5">
+            <label htmlFor="vuong-outbound-url" className="font-semibold text-slate-300">
+              Đầu ra gửi về Vương (HTTP POST)
+            </label>
+            <input
+              id="vuong-outbound-url"
+              type="text"
+              value={inputVuongUrl}
+              onChange={(e) => setInputVuongUrl(e.target.value)}
+              placeholder="http://localhost:8080/api/integration/monitoring-updates"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-100 font-mono"
+            />
+            <label className="flex items-center gap-2 text-slate-300 cursor-pointer pt-0.5">
+              <input
+                type="checkbox"
+                checked={inputVuongEnabled}
+                onChange={(e) => setInputVuongEnabled(e.target.checked)}
+                className="rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-0"
+              />
+              <span>Tự động gửi tiến độ lộ trình (2s/lần) &amp; quyết định bay về Vương</span>
+            </label>
+          </div>
+
           <div className="space-y-1.5">
             <label className="font-semibold text-slate-300 flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-cyan-400" />
@@ -145,27 +178,6 @@ const SettingsModalContent: React.FC = () => {
                   </span>
                 </div>
               </label>
-            </div>
-          </div>
-
-          {/* Cesium Ion Token Settings */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-slate-300 flex items-center gap-1.5">
-              <Key className="w-4 h-4 text-amber-400" />
-              Cesium Ion Access Token (Tùy chọn)
-            </label>
-            <textarea
-              rows={3}
-              value={inputToken}
-              onChange={(e) => setInputToken(e.target.value)}
-              placeholder="Nhập Cesium Ion Token (nếu có)..."
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-100 font-mono text-[11px] focus:outline-none focus:border-cyan-500"
-            />
-            <div className="flex items-start gap-1.5 text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded border border-slate-800">
-              <AlertCircle className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-              <span>
-                <strong>Chế độ dự phòng:</strong> Hệ thống đã được thiết kế hoạt động hoàn toàn độc lập với OpenStreetMap / CartoDB Dark Matter tiles. Nếu không có token, bản đồ 3D vẫn hiển thị đầy đủ và mượt mà.
-              </span>
             </div>
           </div>
         </div>

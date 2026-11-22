@@ -147,7 +147,7 @@ export const FlightListPanel: React.FC = () => {
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono font-bold text-xs text-white tracking-wide">
-                      {uav.callsign ? `${uav.callsign} (${uav.uav_id})` : uav.uav_id}
+                      {uav.uav_id}
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
                       {uav.flight_plan_id ? (

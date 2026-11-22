@@ -457,7 +457,7 @@ export const ImportJsonModal: React.FC<ImportJsonModalProps> = ({ isOpen, onClos
                     <div className="pt-1.5 border-t border-slate-800/80 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-emerald-400 font-semibold font-mono text-[10px]">
-                          ✓ ĐÃ CHUẨN HÓA OBSERVEDSTATE SẴN SÀNG CHUYỂN KHỐI 5
+                          ✓ ĐÃ CHUẨN HÓA DỮ LIỆU TELEMETRY THÀNH CÔNG
                         </span>
                         <div className="flex items-center gap-1.5">
                           <button

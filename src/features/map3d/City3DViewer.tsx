@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useMonitoringStore } from '../../stores/useMonitoringStore';
 import { useTacticalStore } from '../../stores/useTacticalStore';
-import { ChevronDown, ChevronUp, Compass, Crosshair, Eye, ShieldAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, Compass, Crosshair, Eye } from 'lucide-react';
 import {
   ArticulatedUavHandle,
   buildArticulatedUav,
@@ -13,6 +13,7 @@ import {
 } from './threeBuilders';
 import { UAVType } from '../../types/telemetry';
 import { ObservedUAVState } from '../../types/monitoring';
+import { predictForwardPath } from '../../services/prediction/TrajectoryPredictor';
 
 interface UavRuntimeEntry {
   uavId: string;
@@ -27,6 +28,7 @@ interface UavRuntimeEntry {
   dropLine: THREE.Line;
   groundRing: THREE.Mesh;
   trailLine: THREE.Line;
+  predictionLine: THREE.Line;
 }
 
 function getStatusHex(uav: ObservedUAVState, isConflicting: boolean): string {
@@ -66,13 +68,11 @@ export const City3DViewer: React.FC = () => {
     showZones,
     showPlans,
     showTrails,
+    showPredictions,
     show3DCity,
     cameraTarget,
-    conflictDemoActive,
     selectUav,
     focusUav,
-    startConflictDemo,
-    stopConflictDemo,
   } = useMonitoringStore();
 
   const { conflicts, previewedOption } = useTacticalStore();
@@ -471,7 +471,14 @@ export const City3DViewer: React.FC = () => {
     // Remove departed UAVs
     uavMapRef.current.forEach((entry, id) => {
       if (!currentIds.has(id)) {
-        layer.remove(entry.handle.root, entry.labelSprite, entry.dropLine, entry.groundRing, entry.trailLine);
+        layer.remove(
+          entry.handle.root,
+          entry.labelSprite,
+          entry.dropLine,
+          entry.groundRing,
+          entry.trailLine,
+          entry.predictionLine
+        );
         uavMapRef.current.delete(id);
       }
     });
@@ -489,7 +496,7 @@ export const City3DViewer: React.FC = () => {
       const accentHex = getStatusHex(uav, isConflicting);
       const isSelected = selectedUavId === uav.uav_id;
       const tier = getAltitudeTier(uav.position.altitude_m);
-      const labelTitle = isConflicting ? `⚠ ${uav.callsign || uav.uav_id}` : uav.callsign || uav.uav_id;
+      const labelTitle = isConflicting ? `⚠ ${uav.uav_id}` : uav.uav_id;
       const labelSub = `${Math.round(uav.position.altitude_m)}m ${uav.position.altitude_reference} (${tier}) • ${Math.round(uav.velocity.ground_speed_mps)}m/s`;
       const cacheKey = `${labelTitle}|${labelSub}|${accentHex}|${isSelected}`;
 
@@ -528,7 +535,18 @@ export const City3DViewer: React.FC = () => {
           new THREE.LineBasicMaterial({ color: accentHex, transparent: true, opacity: 0.9 })
         );
 
-        layer.add(handle.root, labelSprite, dropLine, groundRing, trailLine);
+        const predictionLine = new THREE.Line(
+          new THREE.BufferGeometry(),
+          new THREE.LineDashedMaterial({
+            color: '#facc15',
+            dashSize: 16,
+            gapSize: 10,
+            transparent: true,
+            opacity: 0.95,
+          })
+        );
+
+        layer.add(handle.root, labelSprite, dropLine, groundRing, trailLine, predictionLine);
         entry = {
           uavId: uav.uav_id,
           uavType: uav.uav_profile?.uav_type,
@@ -542,6 +560,7 @@ export const City3DViewer: React.FC = () => {
           dropLine,
           groundRing,
           trailLine,
+          predictionLine,
         };
         uavMapRef.current.set(uav.uav_id, entry);
       } else {
@@ -566,8 +585,22 @@ export const City3DViewer: React.FC = () => {
         entry.trailLine.geometry = new THREE.BufferGeometry().setFromPoints(trailPts);
         (entry.trailLine.material as THREE.LineBasicMaterial).color.set(accentHex);
       }
+
+      // Forward Dashed Prediction ("- - - -")
+      const linkedPlan = uav.flight_plan_id ? flightPlans[uav.flight_plan_id] : undefined;
+      const prediction = showPredictions ? predictForwardPath(uav, linkedPlan) : null;
+      entry.predictionLine.visible = Boolean(showPredictions && prediction && prediction.points.length > 1);
+      if (entry.predictionLine.visible && prediction) {
+        const predPts = prediction.points.map((pt) => wgs84ToThree(pt.latitude, pt.longitude, pt.altitude_m));
+        entry.predictionLine.geometry.dispose();
+        entry.predictionLine.geometry = new THREE.BufferGeometry().setFromPoints(predPts);
+        entry.predictionLine.computeLineDistances();
+        (entry.predictionLine.material as THREE.LineDashedMaterial).color.set(
+          isConflicting ? '#ef4444' : '#facc15'
+        );
+      }
     });
-  }, [uavStates, selectedUavId, showTrails, conflicts]);
+  }, [uavStates, flightPlans, selectedUavId, showTrails, showPredictions, conflicts]);
 
   // 7. Render Tactical Conflicts & Resolution Preview Trajectory
   useEffect(() => {
@@ -805,6 +838,15 @@ export const City3DViewer: React.FC = () => {
             />
             Vệt bay thực tế (Trails)
           </label>
+          <label className="flex items-center gap-2 text-xs text-slate-300 px-0.5 cursor-pointer hover:text-white">
+            <input
+              type="checkbox"
+              checked={showPredictions}
+              onChange={() => useMonitoringStore.getState().toggleLayer('predictions')}
+              className="rounded bg-slate-800 border-slate-700 text-amber-500 focus:ring-0"
+            />
+            Dự đoán đường đi (- - - -)
+          </label>
         </div>
 
         <button
@@ -813,20 +855,6 @@ export const City3DViewer: React.FC = () => {
         >
           <Eye className="w-3 h-3 text-cyan-400" />
           Cỡ UAV: {heroScaleMode ? 'Nổi bật (MVP)' : 'Gọn hơn'}
-        </button>
-
-        <div className="border-t border-slate-800 my-0.5" />
-
-        <button
-          onClick={() => (conflictDemoActive ? stopConflictDemo() : startConflictDemo())}
-          className={`flex items-center justify-center gap-1.5 py-1.5 px-2 text-[11px] font-semibold rounded border transition-all ${
-            conflictDemoActive
-              ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-400 shadow-md shadow-rose-950 animate-pulse'
-              : 'bg-rose-950/70 hover:bg-rose-900/80 text-rose-200 border-rose-700/80'
-          }`}
-        >
-          <ShieldAlert className="w-3.5 h-3.5" />
-          <span>{conflictDemoActive ? 'Dừng Kịch bản Xung đột' : 'Mô phỏng Xung đột 3D'}</span>
         </button>
       </div>
 

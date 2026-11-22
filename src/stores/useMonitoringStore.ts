@@ -8,6 +8,12 @@ import { IDataSource, ConnectionStatus } from '../services/dataSource/IDataSourc
 import { DemoDataSource } from '../services/dataSource/DemoDataSource';
 import { LiveWebSocketDataSource } from '../services/dataSource/LiveWebSocketDataSource';
 import { part5Bridge } from '../services/part5Bridge/Part5ExportBridge';
+import {
+  VuongOutboundLog,
+  buildVuongDecisionPayload,
+  buildVuongProgressPayload,
+  postToVuong,
+} from '../services/dispatch/VuongOutboundService';
 import { DANANG_RESTRICTED_ZONES } from '../data/danangAirspace';
 import { MOCK_FLIGHT_PLANS } from '../data/mockScenarios';
 
@@ -54,9 +60,15 @@ interface MonitoringStoreState {
   showZones: boolean;
   showPlans: boolean;
   showTrails: boolean;
+  showPredictions: boolean;
   show3DCity: boolean;
   mapStyle: 'DARK' | 'SATELLITE' | 'STREET';
   cameraTarget: CameraTarget | null;
+
+  // Outbound Delivery to Vuong (UTM Ops)
+  vuongOutboundUrl: string;
+  vuongOutboundEnabled: boolean;
+  vuongOutboundLogs: VuongOutboundLog[];
 
   // UI Panels
   leftPanelOpen: boolean;
@@ -71,13 +83,21 @@ interface MonitoringStoreState {
   setOpsWsUrl: (url: string) => void;
   setCesiumIonToken: (token: string) => void;
   setTelemetryProtocol: (p: 'AUTO_DETECT' | 'INTERNAL_V1' | 'PHUOC_SIMULATOR') => void;
+  setVuongOutboundUrl: (url: string) => void;
+  setVuongOutboundEnabled: (enabled: boolean) => void;
+  clearVuongOutboundLogs: () => void;
+  sendDecisionToVuong: (
+    uavId: string,
+    adjustment: ResolutionAdjustment,
+    reason: string
+  ) => Promise<void>;
   selectUav: (id: string | null) => void;
   focusUav: (id: string) => void;
   setSearchQuery: (query: string) => void;
   setStatusFilter: (filter: 'ALL' | 'FLYING' | 'ALERT' | 'STALE') => void;
   acknowledgeAlert: (alertId: string) => void;
   clearAlerts: () => void;
-  toggleLayer: (layer: 'zones' | 'plans' | 'trails' | 'city3d') => void;
+  toggleLayer: (layer: 'zones' | 'plans' | 'trails' | 'city3d' | 'predictions') => void;
   setRenderEngine: (engine: 'THREE_3D' | 'CESIUM_MAP') => void;
   setMapStyle: (style: 'DARK' | 'SATELLITE' | 'STREET') => void;
   setLeftPanelOpen: (open: boolean) => void;
@@ -106,6 +126,7 @@ const synchronizer = new TelemetrySynchronizer();
 let activeDataSource: IDataSource | null = null;
 let opsDataSource: LiveWebSocketDataSource | null = null;
 let livenessTimer: number | null = null;
+let livenessTickCount = 0;
 
 // Initial flight plans map
 const initialPlansMap: Record<string, FlightPlan> = {};
@@ -150,10 +171,16 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   showZones: true,
   showPlans: true,
   showTrails: true,
+  showPredictions: true,
   show3DCity: true,
   renderEngine: 'THREE_3D',
   mapStyle: 'DARK',
   cameraTarget: null,
+
+  vuongOutboundUrl:
+    import.meta.env.VITE_VUONG_OUTBOUND_URL || 'http://localhost:8080/api/integration/monitoring-updates',
+  vuongOutboundEnabled: false,
+  vuongOutboundLogs: [],
 
   leftPanelOpen: true,
   rightPanelOpen: true,
@@ -173,6 +200,39 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
     opsDataSource?.setUrl(url);
   },
   setTelemetryProtocol: (p) => set({ telemetryProtocol: p }),
+  setVuongOutboundUrl: (url: string) => set({ vuongOutboundUrl: url }),
+  setVuongOutboundEnabled: (enabled: boolean) => set({ vuongOutboundEnabled: enabled }),
+  clearVuongOutboundLogs: () => set({ vuongOutboundLogs: [] }),
+
+  sendDecisionToVuong: async (
+    uavId: string,
+    adjustment: ResolutionAdjustment,
+    reason: string
+  ) => {
+    const state = get();
+    const uav = state.uavStates[uavId];
+    const flightId = uav?.flight_plan_id || 'UNLINKED';
+    const payload = buildVuongDecisionPayload(uavId, adjustment, reason, flightId, 'EXECUTING');
+    const decisionUrl = state.vuongOutboundUrl.replace(/monitoring-updates\/?$/, 'monitoring-decisions');
+    const result = await postToVuong(decisionUrl, payload);
+
+    const log: VuongOutboundLog = {
+      id: `OUT-DEC-${uavId}-${Date.now()}`,
+      timestampUtc: new Date().toISOString(),
+      eventType: 'monitoring.decision',
+      uavId,
+      flightId,
+      status: result.ok ? 'SENT' : 'ERROR',
+      httpStatus: result.httpStatus,
+      summary: String(payload.instructionSummary || adjustment.action_type),
+      errorMessage: result.errorMessage,
+      payload,
+    };
+
+    set((prev) => ({
+      vuongOutboundLogs: [log, ...prev.vuongOutboundLogs].slice(0, 30),
+    }));
+  },
 
   setLeftPanelOpen: (open: boolean) => set({ leftPanelOpen: open }),
   setRightPanelOpen: (open: boolean) => set({ rightPanelOpen: open }),
@@ -234,11 +294,12 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
 
   clearAlerts: () => set({ alerts: [] }),
 
-  toggleLayer: (layer: 'zones' | 'plans' | 'trails' | 'city3d') => {
+  toggleLayer: (layer: 'zones' | 'plans' | 'trails' | 'city3d' | 'predictions') => {
     if (layer === 'zones') set((s) => ({ showZones: !s.showZones }));
     if (layer === 'plans') set((s) => ({ showPlans: !s.showPlans }));
     if (layer === 'trails') set((s) => ({ showTrails: !s.showTrails }));
     if (layer === 'city3d') set((s) => ({ show3DCity: !s.show3DCity }));
+    if (layer === 'predictions') set((s) => ({ showPredictions: !s.showPredictions }));
   },
 
   setRenderEngine: (engine: 'THREE_3D' | 'CESIUM_MAP') => set({ renderEngine: engine }),
@@ -320,6 +381,14 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
     set((state) => ({
       alerts: [alert, ...state.alerts].slice(0, 50),
     }));
+
+    if (get().vuongOutboundEnabled) {
+      void get().sendDecisionToVuong(
+        uavId,
+        adjustment,
+        `Xử lý né xung đột chiến thuật: ${detailText}`
+      );
+    }
   },
 
   setMode: (newMode: 'DEMO' | 'LIVE') => {
@@ -337,6 +406,7 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
     set({
       mode: newMode,
       uavStates: {},
+      alerts: [],
       flightPlans: newMode === 'DEMO' ? { ...initialPlansMap } : {},
       opsConnectionStatus: 'DISCONNECTED',
       selectedUavId: null,
@@ -544,10 +614,44 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
       set({ uavStates: updatedMap, alerts: combinedAlerts });
       part5Bridge.generateSnapshot(updatedMap, combinedAlerts);
     }
+
+    livenessTickCount += 1;
+    if (state.vuongOutboundEnabled && !isPaused && livenessTickCount % 2 === 0) {
+      const targetUrl = state.vuongOutboundUrl;
+      const plansMap = state.flightPlans;
+      Object.values(updatedMap).forEach((uav) => {
+        const linkedPlan = uav.flight_plan_id ? plansMap[uav.flight_plan_id] : undefined;
+        const payload = buildVuongProgressPayload(uav, linkedPlan);
+        const routeProgress = payload.routeProgress as {
+          progressPercent: number;
+          currentLegLabel: string;
+        };
+        const flightId = String(payload.flightId || 'UNLINKED');
+
+        void postToVuong(targetUrl, payload).then((res) => {
+          const log: VuongOutboundLog = {
+            id: `OUT-PROG-${uav.uav_id}-${Date.now()}`,
+            timestampUtc: new Date().toISOString(),
+            eventType: 'monitoring.progress',
+            uavId: uav.uav_id,
+            flightId,
+            status: res.ok ? 'SENT' : 'ERROR',
+            httpStatus: res.httpStatus,
+            summary: `${routeProgress.progressPercent}% (${routeProgress.currentLegLabel}) • ${Math.round(uav.position.altitude_m)}m`,
+            errorMessage: res.errorMessage,
+            payload,
+          };
+          set((prev) => ({
+            vuongOutboundLogs: [log, ...prev.vuongOutboundLogs].slice(0, 30),
+          }));
+        });
+      });
+    }
   },
 
   initializeDataSources: () => {
     const store = get();
+    set({ vuongOutboundEnabled: true });
     store.setMode('DEMO');
 
     if (!livenessTimer) {
@@ -558,6 +662,7 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   },
 
   cleanup: () => {
+    livenessTickCount = 0;
     opsDataSource?.stop();
     opsDataSource = null;
     set({ opsConnectionStatus: 'DISCONNECTED' });
