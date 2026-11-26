@@ -26,8 +26,14 @@ export const TelemetryPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'TELEMETRY' | 'PROFILE' | 'PROVENANCE' | 'ALERTS'>('TELEMETRY');
   const [vuongExpanded, setVuongExpanded] = useState(true);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [cmdAlt, setCmdAlt] = useState('90');
+  const [cmdSpeed, setCmdSpeed] = useState('14');
+  const [cmdHeading, setCmdHeading] = useState('90');
+  const [cmdFeedback, setCmdFeedback] = useState<string | null>(null);
 
   const {
+    mode,
+    wsUrl,
     selectedUavId,
     uavStates,
     flightPlans,
@@ -40,6 +46,33 @@ export const TelemetryPanel: React.FC = () => {
     acknowledgeAlert,
     clearAlerts,
   } = useMonitoringStore();
+
+  const sendKhoi2Command = async (commandType: string, parameters: Record<string, unknown> = {}) => {
+    if (!selectedUavId) return;
+    let cmdUrl = 'http://localhost:8001/api/commands';
+    try {
+      const parsed = new URL(wsUrl);
+      const proto = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+      cmdUrl = `${proto}//${parsed.host}/api/commands`;
+    } catch {
+      // fallback default
+    }
+    try {
+      const res = await fetch(cmdUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uav_id: selectedUavId, command_type: commandType, parameters }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.feedback?.message) {
+        setCmdFeedback(`✔ ${data.feedback.message}`);
+      } else {
+        setCmdFeedback(`⚠ Lỗi: ${data?.detail?.feedback?.message || res.statusText}`);
+      }
+    } catch {
+      setCmdFeedback('⚠ Không kết nối được Khối 2 (:8001)');
+    }
+  };
 
   const selectedUav = selectedUavId ? uavStates[selectedUavId] : null;
   const plan = selectedUav && selectedUav.flight_plan_id ? flightPlans[selectedUav.flight_plan_id] : null;
@@ -159,6 +192,106 @@ export const TelemetryPanel: React.FC = () => {
                   </div>
                 )}
               </div>
+
+              {/* Direct UAV Flight Controls -> Khoi 2 PX4 SITL */}
+              {mode === 'LIVE' && (
+                <div className="bg-slate-900/80 border border-cyan-900/70 p-2.5 rounded-lg space-y-2">
+                  <div className="text-[10px] uppercase font-bold text-cyan-300 flex items-center justify-between">
+                    <span>🎮 Điều khiển trực tiếp ({selectedUav.uav_id})</span>
+                    <span className="text-[9px] font-mono text-slate-400">➔ Khối 2 PX4</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-[10.5px] font-semibold">
+                    <button
+                      onClick={() => void sendKhoi2Command('TAKEOFF')}
+                      className="py-1 px-1.5 rounded bg-emerald-700/80 hover:bg-emerald-600 text-white"
+                    >
+                      Cất cánh
+                    </button>
+                    <button
+                      onClick={() => void sendKhoi2Command('RESUME_MISSION')}
+                      className="py-1 px-1.5 rounded bg-cyan-700/80 hover:bg-cyan-600 text-white"
+                    >
+                      Bay tuyến
+                    </button>
+                    <button
+                      onClick={() => void sendKhoi2Command('HOLD_POSITION')}
+                      className="py-1 px-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100"
+                    >
+                      Giữ chỗ
+                    </button>
+                    <button
+                      onClick={() => void sendKhoi2Command('RTL')}
+                      className="py-1 px-1.5 rounded bg-indigo-700/80 hover:bg-indigo-600 text-white"
+                    >
+                      Về RTL
+                    </button>
+                    <button
+                      onClick={() => void sendKhoi2Command('LAND')}
+                      className="col-span-2 py-1 px-1.5 rounded bg-amber-700/80 hover:bg-amber-600 text-white"
+                    >
+                      Hạ cánh (0m)
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 text-[10px]">
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        value={cmdAlt}
+                        onChange={(e) => setCmdAlt(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-slate-200 font-mono"
+                        title="Độ cao (m)"
+                      />
+                      <button
+                        onClick={() =>
+                          void sendKhoi2Command('CHANGE_ALTITUDE', { target_altitude_m: Number(cmdAlt) })
+                        }
+                        className="px-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white font-semibold shrink-0"
+                      >
+                        Cao
+                      </button>
+                    </div>
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        value={cmdSpeed}
+                        onChange={(e) => setCmdSpeed(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-slate-200 font-mono"
+                        title="Tốc độ (m/s)"
+                      />
+                      <button
+                        onClick={() =>
+                          void sendKhoi2Command('CHANGE_SPEED', { target_speed_mps: Number(cmdSpeed) })
+                        }
+                        className="px-1.5 rounded bg-sky-700 hover:bg-sky-600 text-white font-semibold shrink-0"
+                      >
+                        Tốc độ
+                      </button>
+                    </div>
+                    <div className="flex gap-1">
+                      <input
+                        type="number"
+                        value={cmdHeading}
+                        onChange={(e) => setCmdHeading(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-slate-200 font-mono"
+                        title="Hướng (°)"
+                      />
+                      <button
+                        onClick={() =>
+                          void sendKhoi2Command('CHANGE_HEADING', { target_heading_deg: Number(cmdHeading) })
+                        }
+                        className="px-1.5 rounded bg-teal-700 hover:bg-teal-600 text-white font-semibold shrink-0"
+                      >
+                        Hướng
+                      </button>
+                    </div>
+                  </div>
+                  {cmdFeedback && (
+                    <div className="text-[10px] font-mono text-emerald-300 bg-slate-950/70 px-2 py-1 rounded border border-slate-800">
+                      {cmdFeedback}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Position & Altitude (Strictly preserves AGL or MSL) */}
               <div className="bg-slate-900/80 border border-slate-800 p-2.5 rounded-lg">

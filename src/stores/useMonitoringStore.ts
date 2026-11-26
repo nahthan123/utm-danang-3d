@@ -135,10 +135,10 @@ MOCK_FLIGHT_PLANS.forEach((p) => {
 });
 
 export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
-  mode: 'DEMO',
+  mode: 'LIVE',
   connectionStatus: 'DISCONNECTED',
   connectionMessage: 'Chưa kết nối',
-  wsUrl: import.meta.env.VITE_WS_TELEMETRY_URL || 'ws://localhost:8000/ws/telemetry',
+  wsUrl: import.meta.env.VITE_WS_TELEMETRY_URL || 'ws://localhost:8001/ws/telemetry',
   opsWsUrl: import.meta.env.VITE_OPS_WS_URL || 'ws://localhost:8000/ws/flight-plans',
   opsConnectionStatus: 'DISCONNECTED',
   cesiumIonToken: '',
@@ -361,12 +361,56 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   },
 
   executeTacticalManeuver: (uavId: string, adjustment: ResolutionAdjustment) => {
+    const store = get();
     if (activeDataSource instanceof DemoDataSource) {
       activeDataSource.applyTacticalManeuver(uavId, adjustment);
+    } else if (store.mode === 'LIVE') {
+      // Forward tactical adjustment command directly to Khối 2 PX4 simulator (:8001/api/commands)
+      let cmdUrl = 'http://localhost:8001/api/commands';
+      try {
+        const parsed = new URL(store.wsUrl);
+        const proto = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+        cmdUrl = `${proto}//${parsed.host}/api/commands`;
+      } catch {
+        // fallback default
+      }
+      let commandType: string | null = null;
+      let parameters: Record<string, unknown> = {};
+      if (adjustment.action_type === 'ALTITUDE_CHANGE') {
+        commandType = 'CHANGE_ALTITUDE';
+        parameters = {
+          target_altitude_m: adjustment.target_altitude_m,
+          delta_m: adjustment.altitude_delta_m,
+        };
+      } else if (adjustment.action_type === 'HEADING_CHANGE') {
+        commandType = 'CHANGE_HEADING';
+        parameters = {
+          target_heading_deg: adjustment.target_heading_deg,
+          delta_deg: adjustment.heading_delta_deg,
+        };
+      } else if (adjustment.action_type === 'SPEED_CHANGE') {
+        commandType = 'CHANGE_SPEED';
+        const currentSpeed = store.uavStates[uavId]?.velocity.ground_speed_mps ?? 13.0;
+        const targetSpeed =
+          adjustment.target_ground_speed_mps ??
+          (adjustment.speed_delta_mps !== undefined
+            ? Math.max(0, currentSpeed + adjustment.speed_delta_mps)
+            : currentSpeed);
+        parameters = { target_speed_mps: targetSpeed };
+      }
+      if (commandType) {
+        void fetch(cmdUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uav_id: uavId, command_type: commandType, parameters }),
+        }).catch(() => undefined);
+      }
     }
     const detailText =
       adjustment.action_type === 'ALTITUDE_CHANGE'
         ? `lệnh leo cao ${adjustment.altitude_delta_m ?? 35}m (đích ${adjustment.target_altitude_m}m)`
+        : adjustment.action_type === 'SPEED_CHANGE'
+        ? `lệnh điều chỉnh tốc độ (${adjustment.target_ground_speed_mps ?? adjustment.speed_delta_mps ?? ''} m/s)`
         : `lệnh chuyển hướng +${adjustment.heading_delta_deg ?? 35}°`;
     const alert: MonitoringAlert = {
       alert_id: `ALT-MANEUVER-${Date.now()}`,
@@ -473,7 +517,18 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
       const validMsg = validation.sanitized;
       const state = get();
       const existing = state.uavStates[validMsg.uav_id];
-      const flightPlan = validMsg.flight_plan_id ? state.flightPlans[validMsg.flight_plan_id] : undefined;
+      const findPlanForUav = (flightPlanId: string | undefined, uavId: string, callsign?: string) => {
+        if (flightPlanId && state.flightPlans[flightPlanId]) {
+          return state.flightPlans[flightPlanId];
+        }
+        return Object.values(state.flightPlans).find(
+          (p) =>
+            p.status !== 'CANCELLED' &&
+            p.status !== 'COMPLETED' &&
+            (p.uav_id === uavId || (Boolean(p.callsign) && (p.callsign === uavId || p.callsign === callsign)))
+        );
+      };
+      const flightPlan = findPlanForUav(validMsg.flight_plan_id, validMsg.uav_id, validMsg.callsign);
       const isPaused = state.simStatus.status === 'PAUSED';
 
       const { state: updatedUav, isDuplicate, isOutOfOrder, gapDetected } = synchronizer.processTelemetry(
@@ -620,7 +675,14 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
       const targetUrl = state.vuongOutboundUrl;
       const plansMap = state.flightPlans;
       Object.values(updatedMap).forEach((uav) => {
-        const linkedPlan = uav.flight_plan_id ? plansMap[uav.flight_plan_id] : undefined;
+        const linkedPlan =
+          (uav.flight_plan_id ? plansMap[uav.flight_plan_id] : undefined) ||
+          Object.values(plansMap).find(
+            (p) =>
+              p.status !== 'CANCELLED' &&
+              p.status !== 'COMPLETED' &&
+              (p.uav_id === uav.uav_id || (Boolean(p.callsign) && (p.callsign === uav.uav_id || p.callsign === uav.callsign)))
+          );
         const payload = buildVuongProgressPayload(uav, linkedPlan);
         const routeProgress = payload.routeProgress as {
           progressPercent: number;
@@ -652,7 +714,7 @@ export const useMonitoringStore = create<MonitoringStoreState>((set, get) => ({
   initializeDataSources: () => {
     const store = get();
     set({ vuongOutboundEnabled: true });
-    store.setMode('DEMO');
+    store.setMode('LIVE');
 
     if (!livenessTimer) {
       livenessTimer = window.setInterval(() => {

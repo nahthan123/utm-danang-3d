@@ -30,7 +30,7 @@ const SettingsModalContent: React.FC = () => {
   const [inputVuongEnabled, setInputVuongEnabled] = useState(vuongOutboundEnabled);
 
   const handleSave = () => {
-    setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
+    setWsUrl(inputWsUrl.trim() || 'ws://localhost:8001/ws/telemetry');
     setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
     setVuongOutboundUrl(
       inputVuongUrl.trim() || 'http://localhost:8080/api/integration/monitoring-updates'
@@ -40,7 +40,7 @@ const SettingsModalContent: React.FC = () => {
   };
 
   const handleSaveAndConnect = () => {
-    setWsUrl(inputWsUrl.trim() || 'ws://localhost:8000/ws/telemetry');
+    setWsUrl(inputWsUrl.trim() || 'ws://localhost:8001/ws/telemetry');
     setOpsWsUrl(inputOpsWsUrl.trim() || 'ws://localhost:8000/ws/flight-plans');
     setVuongOutboundUrl(
       inputVuongUrl.trim() || 'http://localhost:8080/api/integration/monitoring-updates'

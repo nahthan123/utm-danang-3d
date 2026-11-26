@@ -84,4 +84,23 @@ describe('UTM Ops plans and independent live telemetry', () => {
     });
     expect(useMonitoringStore.getState().uavStates[plan.uav_id].plan_deviation).toBeUndefined();
   });
+
+  it('matches a Vuong FlightPlan UUID droneId via callsign (serialNumber) with Khoi 2 telemetry', () => {
+    const store = useMonitoringStore.getState();
+    const vuongPlan: FlightPlan = {
+      ...plan,
+      plan_id: '7b726c82-555b-461b-982d-db7a26bb62e8',
+      uav_id: '11111111-2222-3333-4444-555555555555',
+      callsign: 'UAV-DN-01',
+    };
+    store.ingestMessage({ type: 'flight_plan.update', payload: vuongPlan });
+    store.ingestMessage({
+      schema_version: '1.0', type: 'uav.telemetry', sequence: 1, uav_id: 'UAV-DN-01',
+      callsign: 'UAV-DN-01', flight_plan_id: vuongPlan.plan_id,
+      timestamp: vuongPlan.departure_time_utc, status: 'FLYING',
+      position: { latitude: 16.06, longitude: 108.22, altitude_m: 60, altitude_reference: 'AGL' },
+      velocity: { ground_speed_mps: 10, heading_deg: 45 },
+    });
+    expect(useMonitoringStore.getState().uavStates['UAV-DN-01'].plan_deviation?.within_corridor).toBe(true);
+  });
 });

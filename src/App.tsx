@@ -8,7 +8,6 @@ import { City3DViewer } from './features/map3d/City3DViewer';
 import { TelemetryPanel } from './features/telemetry/TelemetryPanel';
 import { BottomBar } from './features/footer/BottomBar';
 import { SettingsModal } from './features/settings/SettingsModal';
-import { ImportJsonModal } from './features/telemetry/ImportJsonModal';
 import { TacticalConflictPanel } from './features/tactical/TacticalConflictPanel';
 import { TacticalReportModal } from './features/tactical/TacticalReportModal';
 
@@ -17,8 +16,6 @@ export const App: React.FC = () => {
     leftPanelOpen,
     rightPanelOpen,
     renderEngine,
-    importJsonModalOpen,
-    setImportJsonModalOpen,
     setRenderEngine,
     initializeDataSources,
     cleanup,
@@ -87,13 +84,7 @@ export const App: React.FC = () => {
       {/* 4. Settings Configuration Modal */}
       <SettingsModal />
 
-      {/* 5. Import JSON / Test External Telemetry Modal */}
-      <ImportJsonModal
-        isOpen={importJsonModalOpen}
-        onClose={() => setImportJsonModalOpen(false)}
-      />
-
-      {/* 6. Tactical Incident Report Modal */}
+      {/* 5. Tactical Incident Report Modal */}
       <TacticalReportModal />
     </div>
   );

@@ -1,5 +1,5 @@
 import { useMonitoringStore } from '../../stores/useMonitoringStore';
-import { Radio, Wifi, WifiOff, RefreshCw, Settings, Sliders, ShieldAlert, Navigation, Play, Pause, FileCode } from 'lucide-react';
+import { Radio, Wifi, WifiOff, RefreshCw, Settings, Sliders, ShieldAlert, Navigation, Play, Pause } from 'lucide-react';
 import { formatUtcTime } from '../../utils/time';
 
 export const TopBar: React.FC = () => {
@@ -17,7 +17,6 @@ export const TopBar: React.FC = () => {
     setLeftPanelOpen,
     setRightPanelOpen,
     setSettingsModalOpen,
-    setImportJsonModalOpen,
     resetCameraToDaNang,
     togglePauseSimulation,
     setSimulationSpeed,
@@ -185,16 +184,6 @@ export const TopBar: React.FC = () => {
             <span>{criticalAlertsCount + warningAlertsCount} Cảnh báo</span>
           </div>
         )}
-
-        {/* Import External Telemetry JSON Button */}
-        <button
-          onClick={() => setImportJsonModalOpen(true)}
-          title="Nạp và kiểm tra bản tin Telemetry JSON (WGS84 hoặc Gazebo ENU)"
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-200 bg-slate-800/90 hover:bg-slate-700 rounded border border-slate-700 transition-all"
-        >
-          <FileCode className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Nạp Telemetry</span>
-        </button>
 
         {/* Settings Modal Toggle */}
         <button

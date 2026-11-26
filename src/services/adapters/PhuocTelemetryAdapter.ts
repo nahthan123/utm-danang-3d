@@ -24,6 +24,7 @@ export interface PhuocRawUavTelemetry {
   messageType?: string;
   sequence?: number;
   flightPlanId?: string;
+  flight_plan_id?: string;
   timestamp?: string | number;
   ts?: string | number;
   time?: string | number;
@@ -574,8 +575,9 @@ export class PhuocTelemetryAdapter {
       inferred.push(`sequence (gán số thứ tự tiếp nhận nội bộ receive_sequence = ${currentSeq})`);
     }
 
-    if (p.flightPlanId && typeof p.flightPlanId === 'string') {
-      received.push(`flightPlanId: "${p.flightPlanId}"`);
+    const resolvedFlightPlanId = p.flightPlanId || p.flight_plan_id;
+    if (resolvedFlightPlanId && typeof resolvedFlightPlanId === 'string') {
+      received.push(`flightPlanId: "${resolvedFlightPlanId}"`);
     } else {
       missing.push('flight_plan_id (chưa liên kết kế hoạch 4D)');
     }
@@ -646,7 +648,7 @@ export class PhuocTelemetryAdapter {
       simulation_time_sec: derivedSimSec,
       uav_id: u.id!,
       callsign: u.callsign,
-      flight_plan_id: p.flightPlanId,
+      flight_plan_id: resolvedFlightPlanId,
       position: {
         latitude: finalLat!,
         longitude: finalLon!,
